@@ -1,0 +1,36 @@
+# Node modules and dependencies
+node_modules
+npm-debug.log
+
+# Environment variables
+.env
+
+# Git and version control
+.git
+.gitignore
+
+# Testing
+coverage
+.nyc_output
+
+# Logs
+logs
+*.log
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# IDE specific files
+.idea
+.vscode
+*.swp
+*.swo
+
+# Build files
+dist
+build
+
+# Documentation
+README.md
+CHANGELOG.md

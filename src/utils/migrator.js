@@ -31,13 +31,10 @@ async function migrate() {
     console.log('Migrations executed successfully:', 
       migrations.map(m => m.name));
     
-    // Close connection after successful migration
-    await sequelize.close();
     return migrations;
   } catch (error) {
     console.error('Migration failed:', error);
-    await sequelize.close();
-    process.exit(1);
+    throw error;
   }
 }
 

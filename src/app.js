@@ -27,4 +27,13 @@ app.use((req, res) => {
   res.status(404).json({
     success: false,
     error: {
-      message: '
+      message: 'Resource not found',
+      code: 404
+    }
+  });
+});
+
+// Global error handler
+app.use(errorHandler);
+
+module.exports = app;

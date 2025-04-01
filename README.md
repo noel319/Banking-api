@@ -1,13 +1,15 @@
-# Banking API
+# Banking API (Optimized Version)
 
-A simple Node.js banking API that handles user balance updates with high concurrency.
+A high-performance Node.js banking API that handles user balance updates with high concurrency using Redis caching and RabbitMQ for event-driven architecture.
 
 ## Features
 
 - RESTful API for updating user balances
 - Handles concurrent balance updates safely
 - Prevents negative balances
-- Optimized for high throughput
+- Redis caching for high performance
+- RabbitMQ for event-driven architecture
+- Audit logging and notifications
 - Containerized with Docker
 
 ## Technology Stack
@@ -15,11 +17,37 @@ A simple Node.js banking API that handles user balance updates with high concurr
 - **Node.js** with Express
 - **PostgreSQL** for data storage
 - **Sequelize ORM** for database access
+- **Redis** for caching
+- **RabbitMQ** for message queuing
 - **Umzug** for database migrations
 - **Docker** and Docker Compose for containerization
-- **Redis** for potential future caching needs
-- **RabbitMQ** for potential future event-driven architecture
 - **Jest** for testing
+
+## Architecture Overview
+
+![Architecture Diagram](https://via.placeholder.com/800x500.png?text=Banking+API+Architecture)
+
+### Components
+
+1. **API Server**: Handles HTTP requests and responses
+2. **User Service**: Core business logic with database operations
+3. **Redis Cache**: Caches user data to reduce database load
+4. **RabbitMQ**: Message broker for event communication
+5. **Notification Worker**: Processes user notifications
+6. **Audit Worker**: Logs all system events for compliance
+
+### Workflow
+
+1. Client sends a balance update request
+2. API validates the request and forwards it to User Service
+3. User Service:
+   - Checks Redis cache for user data
+   - Performs update operation in database
+   - Invalidates Redis cache
+   - Publishes events to RabbitMQ
+4. Notification Worker processes notification events
+5. Audit Worker logs all balance update events
+6. API returns the updated balance to the client
 
 ## Prerequisites
 
@@ -53,7 +81,7 @@ The API will be available at http://localhost:3000
    ```
    npm install
    ```
-4. Start PostgreSQL (or configure .env to point to your instance)
+4. Start PostgreSQL, Redis, and RabbitMQ (or configure .env to point to your instances)
 5. Run migrations:
    ```
    npm run migrate
@@ -61,6 +89,11 @@ The API will be available at http://localhost:3000
 6. Start the server:
    ```
    npm run dev
+   ```
+7. Start workers (in separate terminals):
+   ```
+   npm run start:notification-worker
+   npm run start:audit-worker
    ```
 
 ## Project Structure
@@ -76,6 +109,11 @@ banking-api/
 │   ├── routes/         # API routes
 │   ├── services/       # Business logic
 │   ├── utils/          # Utility functions
+│   │   ├── redis.js    # Redis client
+│   │   └── rabbitmq.js # RabbitMQ client
+│   ├── workers/        # Background workers
+│   │   ├── notificationWorker.js
+│   │   └── auditWorker.js
 │   ├── app.js          # Express app setup
 │   └── server.js       # Application entry point
 ├── tests/              # Test files
@@ -191,31 +229,45 @@ export default function() {
 }
 ```
 
-## Architecture Decisions
+## Performance Optimizations
 
-### Optimistic Locking
+### Redis Caching
 
-Instead of using row-level database locks, this application uses optimistic locking for balance updates:
+- User data is cached in Redis to reduce database load
+- Cache invalidation occurs when data is updated
+- Configurable TTL for cache entries
 
-1. Read the current balance
-2. Calculate the new balance
-3. Update the row only if the current balance matches what was read
-4. If the update affects zero rows, it means another transaction modified the balance, so retry
+### RabbitMQ Message Queue
 
-This approach provides better scalability and performance compared to pessimistic locking.
+- Decouples core transaction processing from side effects
+- Enables asynchronous processing of notifications and audit logs
+- Improves main API response time
 
-### Direct Updates
+### Database Optimizations
 
-Balance changes are processed in real-time without queues or deferred tasks, as required by the specifications. The system handles concurrency through the database transaction system.
+- Optimistic locking for balance updates
+- Proper indexing on frequently queried fields
+- Connection pooling for better performance under high load
+
+## Monitoring and Management
+
+### RabbitMQ Management Interface
+
+The RabbitMQ Management Interface is available at http://localhost:15672 with the following credentials:
+
+- Username: `user`
+- Password: `password`
+
+You can use this interface to monitor queues, exchanges, and message rates.
 
 ## Future Improvements
 
 1. Add authentication and authorization
 2. Implement rate limiting
-3. Add metrics and monitoring
-4. Use Redis for caching frequently accessed data
-5. Implement event-driven architecture with RabbitMQ for eventual consistency in a microservices environment
-6. Add database connection pooling for better performance under high load
+3. Add metrics and monitoring (Prometheus/Grafana)
+4. Implement distributed tracing (OpenTelemetry)
+5. Add health checks and circuit breakers
+6. Implement database read replicas for scaling
 
 ## License
 

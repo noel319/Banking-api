@@ -1,36 +1,58 @@
 const { User, sequelize } = require('../models');
+const redis = require('../utils/redis');
+const rabbitmq = require('../utils/rabbitmq');
+const config = require('../config/rabbitmq');
 
 class UserService {
   /**
-   * Get user by ID
-   * @param {number} userId - The user ID
-   * @returns {Promise<Object>} - The user object
+   * Get user by ID with Redis caching
+   * @param {number} userId - User ID to fetch
+   * @returns {Promise<Object>} - User object
+   * @throws {Error} - If user not found
    */
   async getUserById(userId) {
+    // Try to get user from cache first
+    const cacheKey = `user:${userId}`;
+    const cachedUser = await redis.get(cacheKey);
+    
+    if (cachedUser) {
+      return cachedUser;
+    }
+    
+    // If not in cache, fetch from database
     const user = await User.findByPk(userId);
+    
     if (!user) {
       const error = new Error('User not found');
       error.statusCode = 404;
       throw error;
     }
+    
+    // Store in cache for future requests
+    await redis.set(cacheKey, user.toJSON());
+    
     return user;
   }
 
   /**
-   * Update user balance - the critical method for handling concurrent updates
-   * @param {number} userId - The user ID
-   * @param {number} amount - The amount to add (positive) or subtract (negative)
-   * @returns {Promise<Object>} - The updated user object
+   * Update user balance with optimistic locking, Redis cache and RabbitMQ events
+   * @param {number} userId - User ID to update
+   * @param {number} amount - Amount to add (positive) or subtract (negative)
+   * @returns {Promise<Object>} - Updated user object
+   * @throws {Error} - If user not found or balance would become negative
    */
   async updateBalance(userId, amount) {
-    // Start a database transaction
-    const transaction = await sequelize.transaction();
+    let transaction;
+    const cacheKey = `user:${userId}`;
 
     try {
-      // Get the current user with a row lock
+      // Start a transaction
+      transaction = await sequelize.transaction();
+
+      // Get the current user with balance (with a row lock)
       const user = await User.findByPk(userId, { 
-        transaction,
-        lock: true 
+        lock: transaction.LOCK.UPDATE,
+        transaction 
       });
 
       if (!user) {
@@ -41,7 +63,8 @@ class UserService {
       }
 
       // Calculate new balance
-      const newBalance = parseFloat(user.balance) + amount;
+      const currentBalance = parseFloat(user.balance);
+      const newBalance = currentBalance + parseFloat(amount);
       
       // Check for negative balance and reject if necessary
       if (newBalance < 0) {
@@ -51,30 +74,35 @@ class UserService {
         throw error;
       }
 
-      // Update the balance using the optimized update method
-      // This is much more efficient than user.update() for concurrent operations
-      const [updatedRows] = await User.update(
+      // Publish pre-update event (for audit logging)
+      await rabbitmq.publish(
+        config.exchanges.transactions, 
+        'balance.update',
+        {
+          type: 'balance_update_requested',
+          userId,
+          data: {
+            currentBalance,
+            requestedAmount: amount,
+            requestedNewBalance: newBalance,
+            timestamp: new Date().toISOString()
+          }
+        }
+      );
+
+      // Update the balance using the direct update method for optimal performance
+      await User.update(
         { 
           balance: newBalance,
           updatedAt: new Date()
         },
         { 
           where: { 
-            id: userId,
-            // Use optimistic locking to ensure we're updating the same record we checked
-            balance: user.balance
+            id: userId
           },
           transaction
         }
       );
-
-      // If no rows were updated, another transaction updated the user balance
-      if (updatedRows === 0) {
-        await transaction.rollback();
-        const error = new Error('Balance was modified by another transaction');
-        error.statusCode = 409;
-        throw error;
-      }
 
       // Get the updated user
       const updatedUser = await User.findByPk(userId, { 
@@ -84,12 +112,46 @@ class UserService {
       // Commit the transaction
       await transaction.commit();
       
+      // Invalidate cache
+      await redis.del(cacheKey);
+      
+      // Publish post-update event for notifications and audit logging
+      await rabbitmq.publish(
+        config.exchanges.transactions, 
+        'balance.updated',
+        {
+          type: 'balance_update',
+          userId,
+          data: {
+            previousBalance: currentBalance,
+            amount,
+            newBalance: parseFloat(updatedUser.balance),
+            timestamp: new Date().toISOString()
+          }
+        }
+      );
+      
       return updatedUser;
     } catch (error) {
       // Rollback transaction if not already done
       if (transaction) {
         await transaction.rollback();
       }
+      
+      // Publish failure event for audit logging
+      await rabbitmq.publish(
+        config.exchanges.transactions, 
+        'balance.update.failed',
+        {
+          type: 'balance_update_failed',
+          userId,
+          data: {
+            requestedAmount: amount,
+            error: error.message,
+            timestamp: new Date().toISOString()
+          }
+        }
+      );
       
       // Rethrow the error with proper status code
       if (!error.statusCode) {

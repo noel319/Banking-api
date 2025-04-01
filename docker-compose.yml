@@ -11,11 +11,44 @@ services:
     depends_on:
       - postgres
       - redis
+      - rabbitmq
     env_file:
       - .env
     command: >
       sh -c "npm run migrate && npm run start"
     restart: unless-stopped
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+
+  notification-worker:
+    build: .
+    depends_on:
+      - app
+      - rabbitmq
+    env_file:
+      - .env
+    command: npm run start:notification-worker
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+
+  audit-worker:
+    build: .
+    depends_on:
+      - app
+      - rabbitmq
+    env_file:
+      - .env
+    command: npm run start:audit-worker
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
 
   postgres:
     image: postgres:15-alpine
@@ -27,6 +60,11 @@ services:
       POSTGRES_DB: banking
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -35,8 +73,12 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # For future use with RabbitMQ
   rabbitmq:
     image: rabbitmq:3-management-alpine
     ports:
@@ -47,6 +89,11 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: user
       RABBITMQ_DEFAULT_PASS: password
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

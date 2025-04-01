@@ -7,10 +7,8 @@ describe('Balance API', () => {
   let testUser;
   
   beforeAll(async () => {
-    // Make sure we're using test database
-    expect(process.env.NODE_ENV).toBe('test');
     
-    // Clear users table and create test user
+    expect(process.env.NODE_ENV).toBe('test');    
     await User.destroy({ where: {} });
     testUser = await User.create({
       balance: 10000,
@@ -19,10 +17,8 @@ describe('Balance API', () => {
     });
   });
 
-  afterAll(async () => {
-    // Close database connection
-    await db.sequelize.close();
-    // Close server
+  afterAll(async () => {    
+    await db.sequelize.close();   
     server.close();
   });
 
@@ -59,9 +55,8 @@ describe('Balance API', () => {
         .expect(200);
 
       expect(res.body.success).toBe(true);
-      expect(parseFloat(res.body.data.balance)).toBe(10050);
+      expect(parseFloat(res.body.data.balance)).toBe(10050);      
       
-      // Verify in database
       const updatedUser = await User.findByPk(testUser.id);
       expect(parseFloat(updatedUser.balance)).toBe(10050);
     });
@@ -74,9 +69,8 @@ describe('Balance API', () => {
         .expect(200);
 
       expect(res.body.success).toBe(true);
-      expect(parseFloat(res.body.data.balance)).toBe(10000);
-      
-      // Verify in database
+      expect(parseFloat(res.body.data.balance)).toBe(10000);      
+    
       const updatedUser = await User.findByPk(testUser.id);
       expect(parseFloat(updatedUser.balance)).toBe(10000);
     });
@@ -89,9 +83,8 @@ describe('Balance API', () => {
         .expect(400);
 
       expect(res.body.success).toBe(false);
-      expect(res.body.error.message).toBe('Insufficient funds');
+      expect(res.body.error.message).toBe('Insufficient funds');      
       
-      // Verify balance has not changed
       const updatedUser = await User.findByPk(testUser.id);
       expect(parseFloat(updatedUser.balance)).toBe(10000);
     });
@@ -109,39 +102,34 @@ describe('Balance API', () => {
 
   describe('Concurrent balance updates', () => {
     it('should handle concurrent updates correctly', async () => {
-      // Reset user balance to 10000
+      
       await User.update(
         { balance: 10000 },
         { where: { id: testUser.id } }
       );
-      
-      // Create 50 concurrent requests to increase balance by 10 each
+     
       const increasePromises = Array(50).fill().map(() => 
         request(server)
           .put(`/api/users/${testUser.id}/balance`)
           .send({ amount: 10 })
-      );
+      );      
       
-      // Create 50 concurrent requests to decrease balance by 10 each
       const decreasePromises = Array(50).fill().map(() => 
         request(server)
           .put(`/api/users/${testUser.id}/balance`)
           .send({ amount: -10 })
-      );
+      );      
       
-      // Execute all requests concurrently
       const results = await Promise.all([
         ...increasePromises,
         ...decreasePromises
-      ]);
-      
-      // All requests should have succeeded
+      ]);      
+     
       results.forEach(res => {
         expect(res.status).toBe(200);
         expect(res.body.success).toBe(true);
-      });
+      });      
       
-      // Final balance should be 10000
       const finalUser = await User.findByPk(testUser.id);
       expect(parseFloat(finalUser.balance)).toBe(10000);
     });

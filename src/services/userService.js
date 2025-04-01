@@ -10,8 +10,7 @@ class UserService {
    * @returns {Promise<Object>} - User object
    * @throws {Error} - If user not found
    */
-  async getUserById(userId) {
-    // Try to get user from cache first
+  async getUserById(userId) {   
     const cacheKey = `user:${userId}`;
     const cachedUser = await redis.get(cacheKey);
     
@@ -46,10 +45,8 @@ class UserService {
     const cacheKey = `user:${userId}`;
 
     try {
-      // Start a transaction
       transaction = await sequelize.transaction();
-
-      // Get the current user with balance (with a row lock)
+     
       const user = await User.findByPk(userId, { 
         lock: transaction.LOCK.UPDATE,
         transaction 
@@ -104,15 +101,12 @@ class UserService {
         }
       );
 
-      // Get the updated user
-      const updatedUser = await User.findByPk(userId, { 
+        const updatedUser = await User.findByPk(userId, { 
         transaction 
       });
       
-      // Commit the transaction
       await transaction.commit();
       
-      // Invalidate cache
       await redis.del(cacheKey);
       
       // Publish post-update event for notifications and audit logging
@@ -132,8 +126,7 @@ class UserService {
       );
       
       return updatedUser;
-    } catch (error) {
-      // Rollback transaction if not already done
+    } catch (error) {      
       if (transaction) {
         await transaction.rollback();
       }

@@ -4,9 +4,6 @@ const config = require('../config/rabbitmq');
 let connection = null;
 let channel = null;
 
-/**
- * RabbitMQ helper functions
- */
 const rabbitmq = {
   /**
    * Connect to RabbitMQ
@@ -15,15 +12,13 @@ const rabbitmq = {
   async connect() {
     try {
       if (!connection) {
-        connection = await amqp.connect(config.url);
+        connection = await amqp.connect(config.url);        
         
-        // Handle connection errors
         connection.on('error', (error) => {
           console.error('RabbitMQ connection error:', error);
           setTimeout(() => this.connect(), 5000);
-        });
+        });        
         
-        // Handle connection close
         connection.on('close', () => {
           console.log('RabbitMQ connection closed, reconnecting...');
           setTimeout(() => this.connect(), 5000);
@@ -33,17 +28,14 @@ const rabbitmq = {
       }
       
       if (!channel) {
-        channel = await connection.createChannel();
+        channel = await connection.createChannel();        
         
-        // Create exchanges
-        await channel.assertExchange(config.exchanges.transactions, 'topic', { durable: true });
+        await channel.assertExchange(config.exchanges.transactions, 'topic', { durable: true });   
         
-        // Create queues
         await channel.assertQueue(config.queues.balanceUpdates, { durable: true });
         await channel.assertQueue(config.queues.notifications, { durable: true });
-        await channel.assertQueue(config.queues.auditLog, { durable: true });
+        await channel.assertQueue(config.queues.auditLog, { durable: true });        
         
-        // Bind queues to exchanges
         await channel.bindQueue(config.queues.balanceUpdates, config.exchanges.transactions, 'balance.update');
         await channel.bindQueue(config.queues.notifications, config.exchanges.transactions, 'balance.updated');
         await channel.bindQueue(config.queues.auditLog, config.exchanges.transactions, '#');
@@ -51,8 +43,7 @@ const rabbitmq = {
         console.log('RabbitMQ channel created and exchanges/queues configured');
       }
     } catch (error) {
-      console.error('Failed to connect to RabbitMQ:', error);
-      // Try to reconnect after 5 seconds
+      console.error('Failed to connect to RabbitMQ:', error);     
       setTimeout(() => this.connect(), 5000);
     }
   },
@@ -132,7 +123,6 @@ const rabbitmq = {
   }
 };
 
-// Initialize connection on module load
 rabbitmq.connect();
 
 module.exports = rabbitmq;

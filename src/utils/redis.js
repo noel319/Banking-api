@@ -8,12 +8,10 @@ const redisClient = new Redis({
   keyPrefix: config.keyPrefix
 });
 
-// Handle Redis errors
 redisClient.on('error', (error) => {
   console.error('Redis error:', error);
 });
 
-// Helper functions for Redis operations
 const redis = {
   /**
    * Get value from cache

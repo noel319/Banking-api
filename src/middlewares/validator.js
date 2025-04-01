@@ -1,12 +1,7 @@
 const { body, param, validationResult } = require('express-validator');
 
-/**
- * Validation middleware for Express routes
- */
 const validator = {
-  /**
-   * Validation rules for updating user balance
-   */
+  
   updateBalance: [
     param('userId')
       .isInt({ min: 1 })

@@ -3,7 +3,6 @@ const userRoutes = require('./userRoutes');
 
 const router = express.Router();
 
-// API health check
 router.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -11,7 +10,6 @@ router.get('/health', (req, res) => {
   });
 });
 
-// API routes
 router.use('/users', userRoutes);
 
 module.exports = router;

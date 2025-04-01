@@ -1,8 +1,5 @@
 const userService = require('../services/userService');
 
-/**
- * User controller handling HTTP requests related to users
- */
 class UserController {
   /**
    * Get user by ID

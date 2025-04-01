@@ -4,20 +4,25 @@ services:
   app:
     build: .
     ports:
-      - "3000:3000"
+      - "3000:3000"  # Changed to map host 3001 to container 3000
     volumes:
       - .:/app
       - /app/node_modules
     depends_on:
-      - postgres
-      - redis
-      - rabbitmq
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     env_file:
       - .env
     command: >
       sh -c "npm run migrate && npm run start"
     restart: unless-stopped
     environment:
+      - NODE_ENV=production
+      - PORT=3000  # Explicitly set container port
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
@@ -26,7 +31,7 @@ services:
     build: .
     depends_on:
       - app
-      - rabbitmq
+      - rabbitmq         
     env_file:
       - .env
     command: npm run start:notification-worker
@@ -40,7 +45,7 @@ services:
     build: .
     depends_on:
       - app
-      - rabbitmq
+      - rabbitmq          
     env_file:
       - .env
     command: npm run start:audit-worker
@@ -90,10 +95,10 @@ services:
       RABBITMQ_DEFAULT_USER: user
       RABBITMQ_DEFAULT_PASS: password
     healthcheck:
-      test: ["CMD", "rabbitmqctl", "status"]
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
 
 volumes:
   postgres_data:

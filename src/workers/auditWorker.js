@@ -8,6 +8,8 @@ const config = require('../config/rabbitmq');
 async function startAuditWorker() {
   try {
     console.log('Starting audit worker...');
+
+    await waitForRabbitMQ();
     
     await rabbitmq.consume(config.queues.auditLog, async (message) => {
       try {
@@ -41,6 +43,18 @@ async function startAuditWorker() {
   }
 }
 
+async function waitForRabbitMQ(retries = 5, delay = 2000) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await rabbitmq.connect(); // Assuming you have a connect method
+      return;
+    } catch (err) {
+      if (i === retries - 1) throw err;
+      console.log(`RabbitMQ connection failed (attempt ${i + 1}), retrying...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
 // Allow this to be started directly or imported
 if (require.main === module) {
   startAuditWorker();

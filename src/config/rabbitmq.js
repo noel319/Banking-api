@@ -9,5 +9,8 @@ module.exports = {
     balanceUpdates: 'balance-updates',
     notifications: 'notifications',
     auditLog: 'audit-log'
+  },
+  connection: {
+    url: process.env.RABBITMQ_URL || 'amqp://user:password@rabbitmq:5672'
   }
 };

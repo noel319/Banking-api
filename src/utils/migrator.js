@@ -14,12 +14,17 @@ const sequelize = new Sequelize(
 // Configure Umzug for migrations
 const umzug = new Umzug({
   migrations: {
-    path: path.join(__dirname, '../migrations'),
-    params: [
-      sequelize.getQueryInterface(),
-      Sequelize
-    ]
+    glob: path.join(__dirname, '../migrations/*.js'), // Updated pattern
+    resolve: ({ name, path: migrationPath }) => {
+      const migration = require(migrationPath);
+      return {
+        name,
+        up: async () => migration.up(sequelize.getQueryInterface(), Sequelize),
+        down: async () => migration.down(sequelize.getQueryInterface(), Sequelize)
+      };
+    }
   },
+  context: sequelize.getQueryInterface(),
   storage: new SequelizeStorage({ sequelize }),
   logger: console
 });
@@ -27,6 +32,14 @@ const umzug = new Umzug({
 // Run migrations
 async function migrate() {
   try {
+    // Verify migrations path exists (debugging)
+    const fs = require('fs');
+    const migrationsPath = path.join(__dirname, '../migrations');
+    if (!fs.existsSync(migrationsPath)) {
+      throw new Error(`Migrations directory not found at: ${migrationsPath}`);
+    }
+    console.log(`Using migrations from: ${migrationsPath}`);
+
     const migrations = await umzug.up();
     console.log('Migrations executed successfully:', 
       migrations.map(m => m.name));
